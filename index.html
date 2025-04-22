@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faculty Work Hours Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f5f7fa;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .punch-btn {
+            transition: all 0.3s ease;
+        }
+        .punch-btn:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="min-h-screen">
+        <!-- Login Section -->
+        <div v-if="!isLoggedIn" class="min-h-screen flex items-center justify-center">
+            <div class="bg-white p-8 rounded-lg shadow-lg w-96">
+                <h2 class="text-2xl font-bold mb-6 text-center">Faculty Login</h2>
+                <form @submit.prevent="login" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Email</label>
+                        <input type="email" v-model="loginForm.email" class="w-full p-2 border rounded" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Password</label>
+                        <input type="password" v-model="loginForm.password" class="w-full p-2 border rounded" required>
+                    </div>
+                    <div class="flex justify-between items-center text-sm">
+                        <a href="#" @click="forgotPassword" class="text-blue-600 hover:underline">Forgot Password?</a>
+                        <a href="#" @click="showCaptcha" class="text-blue-600 hover:underline">Refresh Captcha</a>
+                    </div>
+                    <div class="captcha-container bg-gray-100 p-2 rounded text-center">
+                        <span class="font-mono text-lg">{{captchaText}}</span>
+                    </div>
+                    <input type="text" v-model="captchaInput" placeholder="Enter Captcha" class="w-full p-2 border rounded" required>
+                    <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Login</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div v-else class="container mx-auto px-4 py-8">
+            <header class="flex justify-between items-center mb-8">
+                <h1 class="text-2xl font-bold">Faculty Work Hours Tracker</h1>
+                <div class="flex items-center gap-4">
+                    <span>Welcome, {{userData.name}}</span>
+                    <button @click="logout" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
+                        Logout
+                    </button>
+                </div>
+            </header>
+
+            <!-- Punch Controls -->
+            <div class="grid md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4">Time Tracking</h2>
+                    <div class="flex gap-4">
+                        <button @click="punchIn" :disabled="isPunchedIn" 
+                                class="punch-btn flex-1 bg-green-500 text-white p-4 rounded-lg disabled:opacity-50">
+                            <i class="bi bi-box-arrow-in-right text-2xl"></i>
+                            <span class="block">Punch In</span>
+                        </button>
+                        <button @click="punchOut" :disabled="!isPunchedIn"
+                                class="punch-btn flex-1 bg-red-500 text-white p-4 rounded-lg disabled:opacity-50">
+                            <i class="bi bi-box-arrow-right text-2xl"></i>
+                            <span class="block">Punch Out</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status Summary -->
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h2 class="text-xl font-semibold mb-4">Weekly Progress</h2>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-gray-600">Hours Completed</p>
+                            <p class="text-2xl font-bold">{{hoursCompleted}}/{{weeklyTarget}} hrs</p>
+                        </div>
+                        <div class="w-32 h-32">
+                            <canvas id="progressChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Stats -->
+            <div class="grid md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold mb-2">Today's Hours</h3>
+                    <p class="text-3xl font-bold">{{todayHours}}</p>
+                    <p class="text-sm text-gray-600">Hours worked today</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold mb-2">This Week</h3>
+                    <p class="text-3xl font-bold">{{weeklyHours}}</p>
+                    <p class="text-sm text-gray-600">Hours this week</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-lg font-semibold mb-2">Monthly Total</h3>
+                    <p class="text-3xl font-bold">{{monthlyHours}}</p>
+                    <p class="text-sm text-gray-600">Hours this month</p>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="bg-white p-6 rounded-lg shadow mb-8">
+                <h2 class="text-xl font-semibold mb-4">Recent Activity</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b">
+                                <th class="text-left py-2">Date</th>
+                                <th class="text-left py-2">Punch In</th>
+                                <th class="text-left py-2">Punch Out</th>
+                                <th class="text-left py-2">Total Hours</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="log in recentLogs" :key="log.date" class="border-b">
+                                <td class="py-2">{{log.date}}</td>
+                                <td class="py-2">{{log.punchIn}}</td>
+                                <td class="py-2">{{log.punchOut}}</td>
+                                <td class="py-2">{{log.totalHours}}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue
+
+        createApp({
+            data() {
+                return {
+                    isLoggedIn: false,
+                    isPunchedIn: false,
+                    loginForm: {
+                        email: '',
+                        password: ''
+                    },
+                    captchaText: this.generateCaptcha(),
+                    captchaInput: '',
+                    userData: {
+                        name: 'John Doe',
+                        role: 'Assistant Professor'
+                    },
+                    hoursCompleted: 28,
+                    weeklyTarget: 35,
+                    todayHours: '6.5',
+                    weeklyHours: '28',
+                    monthlyHours: '112',
+                    recentLogs: [
+                        { date: '2023-11-20', punchIn: '09:00 AM', punchOut: '05:30 PM', totalHours: '8.5' },
+                        { date: '2023-11-19', punchIn: '09:15 AM', punchOut: '05:00 PM', totalHours: '7.75' },
+                        { date: '2023-11-18', punchIn: '09:30 AM', punchOut: '04:45 PM', totalHours: '7.25' }
+                    ]
+                }
+            },
+            mounted() {
+                this.initProgressChart()
+                // Check geolocation
+                if ("geolocation" in navigator) {
+                    console.log("Geolocation is available")
+                } else {
+                    console.log("Geolocation is not available")
+                }
+            },
+            methods: {
+                generateCaptcha() {
+                    return Math.random().toString(36).substring(2, 8).toUpperCase()
+                },
+                showCaptcha() {
+                    this.captchaText = this.generateCaptcha()
+                },
+                login(e) {
+                    if (this.captchaInput.toUpperCase() !== this.captchaText) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Invalid Captcha',
+                            text: 'Please try again'
+                        })
+                        this.showCaptcha()
+                        return
+                    }
+                    // Simulate login
+                    this.isLoggedIn = true
+                },
+                logout() {
+                    this.isLoggedIn = false
+                    this.loginForm = { email: '', password: '' }
+                },
+                forgotPassword() {
+                    Swal.fire({
+                        title: 'Reset Password',
+                        text: 'Enter your email address to reset password',
+                        input: 'email',
+                        showCancelButton: true
+                    })
+                },
+                punchIn() {
+                    navigator.geolocation.getCurrentPosition((position) => {
+                        // Here you would validate if the coordinates are within campus bounds
+                        this.isPunchedIn = true
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Punched In Successfully',
+                            text: `Time: ${new Date().toLocaleTimeString()}`
+                        })
+                    }, (error) => {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Location Error',
+                            text: 'Please enable location services and ensure you are on campus'
+                        })
+                    })
+                },
+                punchOut() {
+                    navigator.geolocation.getCurrentPosition((position) => {
+                        this.isPunchedIn = false
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Punched Out Successfully',
+                            text: `Time: ${new Date().toLocaleTimeString()}`
+                        })
+                    })
+                },
+                initProgressChart() {
+                    const ctx = document.getElementById('progressChart')
+                    new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            datasets: [{
+                                data: [this.hoursCompleted, this.weeklyTarget - this.hoursCompleted],
+                                backgroundColor: ['#10B981', '#E5E7EB']
+                            }]
+                        },
+                        options: {
+                            cutout: '80%',
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            }
+                        }
+                    })
+                }
+            }
+        }).mount('#app')
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
